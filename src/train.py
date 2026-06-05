@@ -1,4 +1,5 @@
 import os
+import json
 import joblib
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
@@ -35,6 +36,15 @@ for name, model in models.items():
 
 best_name  = max(results, key=lambda x: results[x]["roc_auc"])
 best_model = results[best_name]["model"]
+
 joblib.dump(best_model, os.path.join(MODELS_DIR, "best_model.pkl"))
 joblib.dump(best_name,  os.path.join(MODELS_DIR, "best_model_name.pkl"))
+
+with open(os.path.join(MODELS_DIR, "best_metrics.json"), "w") as f:
+    json.dump({
+        "accuracy": results[best_name]["accuracy"],
+        "f1":       results[best_name]["f1"],
+        "roc_auc":  results[best_name]["roc_auc"],
+    }, f)
+
 print(f"\nBest: {best_name} (AUC: {results[best_name]['roc_auc']:.4f})")
