@@ -1,3 +1,6 @@
+import os
+import sys
+import subprocess
 import streamlit as st
 import numpy as np
 import joblib
@@ -6,18 +9,43 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")
 
+# ── Cold-start auto-build ──────────────────────────────────────────────────
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(APP_DIR)
+MODELS_DIR = os.path.join(ROOT_DIR, "models")
+OUTPUTS_DIR = os.path.join(ROOT_DIR, "outputs")
+SRC_DIR = os.path.join(ROOT_DIR, "src")
+
+def run_pipeline():
+    st.info("⚙️ First run detected — building model pipeline. This takes ~60 seconds...")
+    progress = st.progress(0, text="Running preprocess.py...")
+    subprocess.run([sys.executable, os.path.join(SRC_DIR, "preprocess.py")], check=True, cwd=ROOT_DIR)
+    progress.progress(33, text="Running train.py...")
+    subprocess.run([sys.executable, os.path.join(SRC_DIR, "train.py")], check=True, cwd=ROOT_DIR)
+    progress.progress(66, text="Running evaluate.py...")
+    subprocess.run([sys.executable, os.path.join(SRC_DIR, "evaluate.py")], check=True, cwd=ROOT_DIR)
+    progress.progress(100, text="Done!")
+    st.success("✅ Pipeline complete. Loading app...")
+    st.rerun()
+
+if not os.path.exists(os.path.join(MODELS_DIR, "best_model.pkl")):
+    run_pipeline()
+    st.stop()
+
+# ── Load artifacts ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="Heart Disease Predictor", page_icon="🫀", layout="wide")
 
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load("models/best_model.pkl")
-    scaler = joblib.load("models/scaler.pkl")
-    feature_names = joblib.load("models/feature_names.pkl")
-    best_name = joblib.load("models/best_model_name.pkl")
+    model = joblib.load(os.path.join(MODELS_DIR, "best_model.pkl"))
+    scaler = joblib.load(os.path.join(MODELS_DIR, "scaler.pkl"))
+    feature_names = joblib.load(os.path.join(MODELS_DIR, "feature_names.pkl"))
+    best_name = joblib.load(os.path.join(MODELS_DIR, "best_model_name.pkl"))
     return model, scaler, feature_names, best_name
 
 model, scaler, feature_names, best_name = load_artifacts()
 
+# ── UI ─────────────────────────────────────────────────────────────────────
 st.title("🫀 Heart Disease Prediction System")
 st.caption(f"Model: {best_name.replace('_', ' ').title()} — ROC-AUC 0.9542")
 
@@ -45,7 +73,6 @@ thal = st.sidebar.selectbox("Thalassemia", options=[0, 1, 2, 3],
 
 input_data = np.array([[age, sex, cp, trestbps, chol, fbs, restecg,
                         thalach, exang, oldpeak, slope, ca, thal]])
-
 input_scaled = scaler.transform(input_data)
 
 predict_btn = st.sidebar.button("Predict", type="primary", use_container_width=True)
@@ -56,13 +83,11 @@ if predict_btn:
 
     st.markdown("---")
     col1, col2 = st.columns(2)
-
     with col1:
         if prediction == 1:
-            st.error(f"### ⚠️ Heart Disease Detected")
+            st.error("### ⚠️ Heart Disease Detected")
         else:
-            st.success(f"### ✅ No Heart Disease Detected")
-
+            st.success("### ✅ No Heart Disease Detected")
     with col2:
         st.metric("Model Confidence", f"{confidence:.1f}%")
         st.metric("Model Used", best_name.replace("_", " ").title())
@@ -73,11 +98,9 @@ if predict_btn:
     with tab1:
         st.subheader("Why did the model predict this?")
         st.caption("Each bar shows how much a feature pushed the prediction toward or away from disease.")
-
         masker = shap.maskers.Independent(input_scaled)
         explainer = shap.Explainer(model.predict_proba, masker)
         shap_values = explainer(input_scaled)
-
         fig, ax = plt.subplots(figsize=(8, 5))
         shap.plots.bar(shap_values[0, :, 1], feature_names=feature_names, show=False, ax=ax)
         plt.tight_layout()
@@ -85,20 +108,21 @@ if predict_btn:
         plt.close()
 
     with tab2:
-        st.image("outputs/confusion_matrix.png", caption="Confusion Matrix on Test Set")
+        cm_path = os.path.join(OUTPUTS_DIR, "confusion_matrix.png")
+        st.image(cm_path, caption="Confusion Matrix on Test Set")
 
     with tab3:
-        st.image("outputs/roc_curves.png", caption="ROC Curve Comparison — All Models")
+        roc_path = os.path.join(OUTPUTS_DIR, "roc_curves.png")
+        st.image(roc_path, caption="ROC Curve Comparison — All Models")
 
 else:
     st.info("Set patient values in the sidebar and click **Predict** to get a result.")
     st.markdown("---")
-
     col1, col2, col3 = st.columns(3)
     col1.metric("Best Model", best_name.replace("_", " ").title())
     col2.metric("ROC-AUC", "0.9542")
     col3.metric("Test Accuracy", "91.67%")
-
     st.markdown("---")
     st.subheader("Model Comparison")
-    st.image("outputs/roc_curves.png")
+    roc_path = os.path.join(OUTPUTS_DIR, "roc_curves.png")
+    st.image(roc_path)
