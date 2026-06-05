@@ -447,7 +447,18 @@ if predict_btn:
             background = shap.sample(X_train, 50, random_state=42)
             explainer  = shap.KernelExplainer(model.predict_proba, background)
             shap_vals  = explainer.shap_values(input_scaled, nsamples=100)
-            vals       = np.array(shap_vals[1][0])
+            # shap_vals shape: list of arrays (old SHAP) or single ndarray (SHAP >= 0.47)
+            # For binary classification, class-1 SHAP values for the single input row:
+            if isinstance(shap_vals, list):
+                # Old format: list[n_classes] of arrays shape (n_samples, n_features)
+                vals = np.array(shap_vals[1][0])
+            else:
+                # New format: ndarray shape (n_samples, n_features, n_classes) or (n_samples, n_features)
+                arr = np.array(shap_vals)
+                if arr.ndim == 3:
+                    vals = arr[0, :, 1]   # class 1, first sample
+                else:
+                    vals = arr[0]         # already (n_features,)
 
         sorted_idx   = np.argsort(vals)
         sorted_vals  = vals[sorted_idx]
@@ -470,7 +481,7 @@ if predict_btn:
         ax.set_axisbelow(True)
         ax.xaxis.grid(True, color="#f5f5f4", linewidth=0.6)
         plt.tight_layout(pad=1.5)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     with tab2:
@@ -478,7 +489,7 @@ if predict_btn:
         if os.path.exists(cm_path):
             col_l, col_c, col_r = st.columns([1, 2, 1])
             with col_c:
-                st.image(cm_path, caption=f"Confusion matrix — {model_label}", use_container_width=True)
+                st.image(cm_path, caption=f"Confusion matrix — {model_label}", width='stretch')
         else:
             st.info("Confusion matrix not available.")
 
@@ -487,7 +498,7 @@ if predict_btn:
         if os.path.exists(roc_path):
             col_l, col_c, col_r = st.columns([0.3, 3, 0.3])
             with col_c:
-                st.image(roc_path, caption="ROC curves — all four models", use_container_width=True)
+                st.image(roc_path, caption="ROC curves — all four models", width='stretch')
         else:
             st.info("ROC curves not available.")
 
@@ -499,7 +510,7 @@ else:
         st.markdown('<div class="section-label">Model Comparison</div>', unsafe_allow_html=True)
         roc_path = os.path.join(OUTPUTS_DIR, "roc_curves.png")
         if os.path.exists(roc_path):
-            st.image(roc_path, use_container_width=True)
+            st.image(roc_path, width='stretch')
 
     with col_info:
         st.markdown('<div class="section-label">About This Tool</div>', unsafe_allow_html=True)
