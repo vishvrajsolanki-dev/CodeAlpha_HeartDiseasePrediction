@@ -101,8 +101,13 @@ if predict_btn:
         masker = shap.maskers.Independent(input_scaled)
         explainer = shap.Explainer(model.predict_proba, masker)
         shap_values = explainer(input_scaled)
+        vals = shap_values[0, :, 1].values
         fig, ax = plt.subplots(figsize=(8, 5))
-        shap.plots.bar(shap_values[0, :, 1], feature_names=feature_names, show=False, ax=ax)
+        colors = ["#d32f2f" if v > 0 else "#1976d2" for v in vals]
+        ax.barh(feature_names, vals, color=colors)
+        ax.axvline(0, color="black", linewidth=0.8)
+        ax.set_xlabel("SHAP Value (impact on prediction)")
+        ax.set_title("Feature Importance for This Prediction")
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
