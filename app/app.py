@@ -443,10 +443,11 @@ if predict_btn:
     with tab1:
         st.caption("SHAP values show how each clinical feature contributed to this individual prediction. Positive values increase risk; negative values decrease it.")
         with st.spinner("Computing SHAP values..."):
-            masker      = shap.maskers.Independent(input_scaled)
-            explainer   = shap.Explainer(model.predict_proba, masker)
-            shap_values = explainer(input_scaled)
-            vals        = shap_values[0, :, 1].values
+            X_train    = joblib.load(os.path.join(MODELS_DIR, "X_train.pkl"))
+            background = shap.sample(X_train, 50, random_state=42)
+            explainer  = shap.KernelExplainer(model.predict_proba, background)
+            shap_vals  = explainer.shap_values(input_scaled, nsamples=100)
+            vals       = np.array(shap_vals[1][0])
 
         sorted_idx   = np.argsort(vals)
         sorted_vals  = vals[sorted_idx]
